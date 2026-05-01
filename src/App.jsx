@@ -63,9 +63,17 @@ function App() {
               // Repeat balance for every mobile number row
               mobileNumbers.forEach((num) => {
                 restructuredData.push({
-                  'Account Name': accountName,
-                  'Mobile Number': num,
-                  'Balance': balance
+                  'phone': num,
+                  'first_name': accountName,
+                  'last_name': '',
+                  'birthday_date': '',
+                  'anniversary_date': '',
+                  'address': '',
+                  'value1': balance,
+                  'value2': '',
+                  'value3': '',
+                  'value4': '',
+                  'value5': ''
                 });
               });
             }
@@ -81,7 +89,7 @@ function App() {
           const day = String(now.getDate()).padStart(2, '0');
           const month = String(now.getMonth() + 1).padStart(2, '0');
           const year = String(now.getFullYear()).slice(-2);
-          const outputFilename = `Payment_Reminder_${day}_${month}_${year}.xlsx`;
+          const outputFilename = `Payment_Reminder_${day}_${month}_${year}.csv`;
           XLSX.writeFile(newWorkbook, outputFilename);
 
           setStatus({ type: 'success', message: `Success! File saved as ${outputFilename}` });
@@ -138,8 +146,8 @@ function App() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8 sm:p-12 text-center transition-all duration-300">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">Document Formatter</h1>
-        <p className="text-slate-500 mb-10">Restructure your account data with one drag.</p>
+        <h1 className="text-3xl font-bold text-slate-800 mb-2">BusyBMS Template Formatter</h1>
+        <p className="text-slate-500 mb-10">Format payment reminders for Meta message template.</p>
 
         <div
           onDragOver={onDragOver}
