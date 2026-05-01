@@ -1,15 +1,53 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, Component } from 'react';
 import * as XLSX from 'xlsx';
-import { Upload, FileCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileCheck, AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-slate-50">
+          <div className="bg-white p-12 rounded-3xl shadow-xl max-w-md">
+            <XCircle className="w-16 h-16 text-rose-500 mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-4">Something went wrong</h2>
+            <p className="text-slate-600 mb-8">The application encountered an unexpected error while processing. This might be due to an unusual file format.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-slate-800 text-white px-8 py-3 rounded-full font-semibold hover:bg-slate-700 transition-colors"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [report, setReport] = useState(null);
 
   const processFile = async (file) => {
     setIsProcessing(true);
     setStatus({ type: 'idle', message: '' });
+    setReport(null);
 
     try {
       const reader = new FileReader();
@@ -27,6 +65,8 @@ function App() {
           }
 
           const restructuredData = [];
+          let processedCount = 0;
+          let skippedCount = 0;
 
           jsonData.forEach((row) => {
             const accountName = row['Account'] || row['Account Name'] || '';
@@ -34,6 +74,7 @@ function App() {
 
             // Skip aggregate rows and rows with no account name
             if (!accountName || /total|subtotal/i.test(String(accountName))) {
+              skippedCount++;
               return;
             }
 
@@ -75,9 +116,16 @@ function App() {
                   'value4': '',
                   'value5': ''
                 });
+                processedCount++;
               });
+            } else {
+              skippedCount++;
             }
           });
+
+          if (restructuredData.length === 0) {
+            throw new Error("No valid mobile numbers found in the file.");
+          }
 
           // Create new workbook
           const newSheet = XLSX.utils.json_to_sheet(restructuredData);
@@ -92,6 +140,7 @@ function App() {
           const outputFilename = `Payment_Reminder_${day}_${month}_${year}.csv`;
           XLSX.writeFile(newWorkbook, outputFilename);
 
+          setReport({ processed: processedCount, skipped: skippedCount });
           setStatus({ type: 'success', message: `Success! File saved as ${outputFilename}` });
         } catch (err) {
           setStatus({ type: 'error', message: `Error processing data: ${err.message}` });
@@ -144,74 +193,110 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8 sm:p-12 text-center transition-all duration-300">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">BusyBMS Template Formatter</h1>
-        <p className="text-slate-500 mb-10">Format payment reminders for Meta message template.</p>
+    <ErrorBoundary>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8 sm:p-12 text-center transition-all duration-300">
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">BusyBMS Template Formatter</h1>
+          <p className="text-slate-500 mb-10">Format payment reminders for Meta message template.</p>
 
-        <div
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          className={`relative group cursor-pointer transition-all duration-500 ease-in-out
-            aspect-square max-w-[320px] mx-auto rounded-full flex flex-col items-center justify-center
-            border-4 border-dashed 
-            ${isDragging 
-              ? 'border-orange-500 bg-orange-50/50 shadow-[0_0_30px_rgba(249,115,22,0.4)] scale-105' 
-              : 'border-slate-200 hover:border-orange-400 hover:bg-slate-50'
-            }
-          `}
-          onClick={() => document.getElementById('file-upload').click()}
-        >
-          <input
-            id="file-upload"
-            type="file"
-            className="hidden"
-            accept=".xlsx, .xls"
-            onChange={onFileChange}
-          />
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`relative group cursor-pointer transition-all duration-500 ease-in-out
+              aspect-square max-w-[320px] mx-auto rounded-full flex flex-col items-center justify-center
+              border-4 border-dashed 
+              ${isProcessing && status.type === 'success' ? 'border-green-400 bg-green-50' : 
+                isDragging 
+                ? 'border-orange-500 bg-orange-50/50 shadow-[0_0_30px_rgba(249,115,22,0.4)] scale-105' 
+                : 'border-slate-200 hover:border-orange-400 hover:bg-slate-50'
+              }
+            `}
+            onClick={() => !isProcessing && document.getElementById('file-upload').click()}
+          >
+            <input
+              id="file-upload"
+              type="file"
+              className="hidden"
+              accept=".xlsx, .xls"
+              onChange={onFileChange}
+            />
 
-          <div className={`p-6 rounded-full transition-all duration-500 ${isDragging ? 'bg-orange-100' : 'bg-slate-100'}`}>
-            {isProcessing ? (
-              <Loader2 className="w-12 h-12 text-orange-600 animate-spin" />
-            ) : (
-              <Upload className={`w-12 h-12 transition-colors duration-300 ${isDragging ? 'text-orange-600' : 'text-slate-400'}`} />
+            <div className={`p-6 rounded-full transition-all duration-500 ${
+              status.type === 'success' ? 'bg-green-100' : isDragging ? 'bg-orange-100' : 'bg-slate-100'
+            }`}>
+              {isProcessing ? (
+                <Loader2 className="w-12 h-12 text-orange-600 animate-spin" />
+              ) : status.type === 'success' ? (
+                <CheckCircle2 className="w-12 h-12 text-green-600 animate-in zoom-in duration-500" />
+              ) : (
+                <Upload className={`w-12 h-12 transition-colors duration-300 ${isDragging ? 'text-orange-600' : 'text-slate-400'}`} />
+              )}
+            </div>
+            
+            <div className="mt-6">
+              <p className={`font-semibold transition-colors duration-300 ${
+                status.type === 'success' ? 'text-green-700' : isDragging ? 'text-orange-700' : 'text-slate-600'
+              }`}>
+                {status.type === 'success' ? 'Process Complete' : isDragging ? 'Drop to process' : 'Drag file here'}
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                {status.type === 'success' ? 'Check your downloads' : 'or click to browse'}
+              </p>
+            </div>
+
+            {/* Dash ring pattern animation placeholder */}
+            <div className={`absolute inset-[-8px] rounded-full border border-orange-200 opacity-0 transition-opacity duration-500 ${isDragging ? 'opacity-100 scale-110 animate-pulse' : ''}`} />
+            {status.type === 'success' && (
+              <div className="absolute inset-[-12px] rounded-full border-2 border-green-200 animate-ping duration-[2000ms]" />
             )}
           </div>
-          
-          <div className="mt-6">
-            <p className={`font-semibold transition-colors duration-300 ${isDragging ? 'text-orange-700' : 'text-slate-600'}`}>
-              {isDragging ? 'Drop to process' : 'Drag file here'}
-            </p>
-            <p className="text-sm text-slate-400 mt-1">or click to browse</p>
+
+          <div className="mt-10 min-h-[4rem]">
+            {status.type === 'success' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-center gap-2 text-green-600">
+                  <FileCheck className="w-5 h-5" />
+                  <span className="font-medium">{status.message}</span>
+                </div>
+                
+                {report && (
+                  <div className="flex justify-center gap-6 pt-2">
+                    <div className="bg-green-50 px-4 py-2 rounded-xl border border-green-100">
+                      <p className="text-xs text-green-600 uppercase font-bold tracking-wider">Processed</p>
+                      <p className="text-2xl font-bold text-green-700">{report.processed}</p>
+                    </div>
+                    <div className="bg-amber-50 px-4 py-2 rounded-xl border border-amber-100">
+                      <p className="text-xs text-amber-600 uppercase font-bold tracking-wider">Skipped</p>
+                      <p className="text-2xl font-bold text-amber-700">{report.skipped}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <button 
+                  onClick={() => { setStatus({ type: 'idle', message: '' }); setReport(null); }}
+                  className="text-sm text-slate-400 hover:text-slate-600 underline decoration-slate-200 underline-offset-4 transition-colors"
+                >
+                  Process another file
+                </button>
+              </div>
+            )}
+            {status.type === 'error' && (
+              <div className="flex items-center justify-center gap-2 text-rose-500 animate-in fade-in slide-in-from-top-2 duration-300">
+                <AlertCircle className="w-5 h-5" />
+                <span className="font-medium">{status.message}</span>
+              </div>
+            )}
           </div>
 
-          {/* Dash ring pattern animation placeholder */}
-          <div className={`absolute inset-[-8px] rounded-full border border-orange-200 opacity-0 transition-opacity duration-500 ${isDragging ? 'opacity-100 scale-110 animate-pulse' : ''}`} />
-        </div>
-
-        <div className="mt-10 h-12">
-          {status.type === 'success' && (
-            <div className="flex items-center justify-center gap-2 text-orange-600 animate-in fade-in slide-in-from-top-2 duration-300">
-              <FileCheck className="w-5 h-5" />
-              <span className="font-medium">{status.message}</span>
-            </div>
-          )}
-          {status.type === 'error' && (
-            <div className="flex items-center justify-center gap-2 text-rose-500 animate-in fade-in slide-in-from-top-2 duration-300">
-              <AlertCircle className="w-5 h-5" />
-              <span className="font-medium">{status.message}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4 pt-8 border-t border-slate-100">
-          <p className="text-xs text-slate-400">
-            Supports .xlsx and .xls files.
-          </p>
+          <div className="mt-4 pt-8 border-t border-slate-100">
+            <p className="text-xs text-slate-400">
+              Supports .xlsx and .xls files.
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 
