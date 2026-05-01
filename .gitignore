@@ -21,4 +21,7 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+# Excel and CSV data files
+*.xlsx
+*.xls
+*.csv

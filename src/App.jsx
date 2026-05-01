@@ -19,7 +19,8 @@ function App() {
           const workbook = XLSX.read(data, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          // Skip first 5 metadata rows
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 5 });
 
           if (jsonData.length === 0) {
             throw new Error("The Excel file is empty.");
@@ -29,30 +30,34 @@ function App() {
 
           jsonData.forEach((row) => {
             const accountName = row['Account'] || row['Account Name'] || '';
-            const balance = row['Balance'] !== undefined ? row['Balance'] : '';
+            const balance = row['Balance'] !== undefined ? row['Balance'] : 0;
 
-            // Extract potential mobile number columns
+            // Skip aggregate rows and rows with no account name
+            if (!accountName || /total|subtotal/i.test(String(accountName))) {
+              return;
+            }
+
+            // Extract specifically from 'Mobile No.' column
+            const mobileVal = row['Mobile No.'];
             const mobileNumbers = [];
-            Object.keys(row).forEach((key) => {
-              if (key !== 'Account' && key !== 'Balance' && key !== 'Account Name') {
-                const val = row[key];
-                if (val !== null && val !== undefined && val !== '') {
-                  try {
-                    let numStr = String(val).replace('.0', '').trim();
-                    // Basic validation matching the python logic
-                    if (/^\d+$/.test(numStr) && numStr.length > 5) {
-                      mobileNumbers.push(numStr);
-                    } else if (!isNaN(parseInt(val))) {
-                      mobileNumbers.push(String(parseInt(val)));
-                    } else {
-                      mobileNumbers.push(String(val));
-                    }
-                  } catch (err) {
-                    mobileNumbers.push(String(val));
-                  }
+
+            if (mobileVal !== null && mobileVal !== undefined && mobileVal !== '') {
+              // Split by comma or semicolon
+              const parts = String(mobileVal).split(/[,;]/);
+              parts.forEach(part => {
+                // Clean: remove non-numeric characters
+                let cleanNum = part.replace(/\D/g, '');
+                
+                // Validate Indian Mobile: ^(\+91|91|0)?[6789]\d{9}$
+                if (/^[6789]\d{9}$/.test(cleanNum)) {
+                  mobileNumbers.push('91' + cleanNum);
+                } else if (/^0[6789]\d{9}$/.test(cleanNum)) {
+                  mobileNumbers.push('91' + cleanNum.substring(1));
+                } else if (/^91[6789]\d{9}$/.test(cleanNum)) {
+                  mobileNumbers.push(cleanNum);
                 }
-              }
-            });
+              });
+            }
 
             if (mobileNumbers.length === 0) {
               restructuredData.push({
@@ -61,6 +66,7 @@ function App() {
                 'Balance': balance
               });
             } else {
+              // Repeat balance for every mobile number row
               mobileNumbers.forEach((num) => {
                 restructuredData.push({
                   'Account Name': accountName,
