@@ -59,13 +59,7 @@ function App() {
               });
             }
 
-            if (mobileNumbers.length === 0) {
-              restructuredData.push({
-                'Account Name': accountName,
-                'Mobile Number': null,
-                'Balance': balance
-              });
-            } else {
+            if (mobileNumbers.length > 0) {
               // Repeat balance for every mobile number row
               mobileNumbers.forEach((num) => {
                 restructuredData.push({
@@ -82,8 +76,12 @@ function App() {
           const newWorkbook = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Restructured Data");
 
-          // Generate download
-          const outputFilename = "Restructured_Data_Output.xlsx";
+          // Generate download with current date in DD_MM_YY format
+          const now = new Date();
+          const day = String(now.getDate()).padStart(2, '0');
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const year = String(now.getFullYear()).slice(-2);
+          const outputFilename = `Payment_Reminder_${day}_${month}_${year}.xlsx`;
           XLSX.writeFile(newWorkbook, outputFilename);
 
           setStatus({ type: 'success', message: `Success! File saved as ${outputFilename}` });
